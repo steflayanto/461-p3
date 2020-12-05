@@ -93,8 +93,6 @@ def handle_request(res, conn):
     pass
 
 
-# Takes in data from a CONNECT or non-CONNECT and removes
-# - keep-alive
 # Returns the host, port, user_agent, req_type
 def parse_request(res):
     logp("Parsing request")
@@ -119,10 +117,11 @@ def parse_request(res):
 
     logp("Returning from parse request " + host  + " " + port + " " + user_agent + " " + req_type)
     return (host, port, user_agent, req_type)
-    # return host, port
+
 
 def logp(str):
     print(HOST_NAME + " " + str)
+
 
 def build_http(host, port, user_agent, req_type, opt_msg):
     logp("Building http send " + host + " " + port)
@@ -133,7 +132,7 @@ def build_http(host, port, user_agent, req_type, opt_msg):
     res += "Host: " + host + ":" + port + "\r\n"
     res += opt_msg + "\r\n"
     pass
-    # return host, req_type, additional fields as necessary
+
 
 def handle_non_connect(host, port, user_agent, req_type, conn):
     logp("handling non-connect" + host + " " + port)
@@ -143,6 +142,7 @@ def handle_non_connect(host, port, user_agent, req_type, conn):
 
     # while True:
     pass
+
 
 def handle_connect(host, port, user_agent, req_type, conn):
     pass
