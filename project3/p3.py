@@ -126,7 +126,7 @@ def logp(str):
 
 def build_http(host, port, user_agent, req_type, opt_msg):
     logp("Building http send " + host + " " + port)
-    res = req_type + " " + host + ":" + port + " " + "HTTP/1.1\r\n"
+    res = req_type + " " + host + ":" + port + " " + "HTTP/1.0\r\n"
     res += user_agent + "\r\n"
     res += "Proxy-Connection: close\r\n"
     res += "Connection: close\r\n"
