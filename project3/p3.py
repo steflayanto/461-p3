@@ -83,55 +83,57 @@ def run():
 
 
 def handle_request(res, conn):
-    host, port, user_agent, req_type = parse_request(res)
+    host, port, req_type, http_msg = parse_request(res)
     if req_type == "CONNECT":
-        handle_connect(host, port, user_agent, req_type, conn)
-        conn.close()
+        logp("Starting CONNECT thread")
+        _thread.start_new_thread(handle_connect, (host, port, req_type, http_msg, conn))
     else:
-        handle_non_connect(host, port, user_agent, req_type, conn)
-        conn.close()
+        logp("Starting non_CONNECT thread")
+        _thread.start_new_thread(handle_non_connect, (host, port, req_type, http_msg, conn))
     pass
 
 
 # Returns the host, port, user_agent, req_type
 def parse_request(res):
     logp("Parsing request")
-    # split the first line into spaces and get the host + port
     res_decoded = res.decode()
-    split = res_decoded.split(' ')
 
-    req_type = split[0]
-    host = split[1] # could contain port
+    req_type = None
+    host = None
+    port = None
+    http_msg = ""
+    lines = res_decoded.split('\n')
+    for i, line in enumerate(lines):
+        if i == 0:
+            split = line.split(' ')
 
-    # If port is not there, use 80. If https:// is present, use 443
-    if host.find(':') == -1:
-        port = 80
-        if res_decoded.find('https://') != -1:
-            port = 443
-    else:
-        split_hp = res_decoded.split(':')
-        host = split_hp[0]
-        port = res_decoded.split(':')[1]
+            req_type = split[0]
+            host = split[1]  # could contain port
 
-    user_agent = res_decoded.split('User-Agent: ')[1].split("\r\n")[0]
+            # If port is not there, use 80. If https:// is present, use 443
+            if host.find(':') == -1:
+                port = 80
+                if line.find('https://') != -1:
+                    port = 443
+            else:
+                split_hp = host.split(':')
+                host = split_hp[0]
+                port = split_hp[1]
 
-    logp("Returning from parse request " + host  + " " + port + " " + user_agent + " " + req_type)
-    return (host, port, user_agent, req_type)
+            http_msg += req_type + " " + host + ":" + port + " HTTP/1.0\r\n"
+        elif line.find('Proxy-Connection') != -1:
+            http_msg += "Proxy-Connection: close\r\n"
+        elif line.find('Connection') != -1:
+            http_msg += "Connection: close\r\n"
+        else:
+            http_msg += line
+
+    logp("Returning from parse request " + host + " " + port + " " + req_type + " " + http_msg)
+    return (host, port, req_type, http_msg)
 
 
 def logp(str):
     print(HOST_NAME + " " + str)
-
-
-def build_http(host, port, user_agent, req_type, opt_msg):
-    logp("Building http send " + host + " " + port)
-    res = req_type + " " + host + ":" + port + " " + "HTTP/1.0\r\n"
-    res += user_agent + "\r\n"
-    res += "Proxy-Connection: close\r\n"
-    res += "Connection: close\r\n"
-    res += "Host: " + host + ":" + port + "\r\n"
-    res += opt_msg + "\r\n"
-    pass
 
 
 def handle_non_connect(host, port, user_agent, req_type, conn):
@@ -140,7 +142,13 @@ def handle_non_connect(host, port, user_agent, req_type, conn):
     # browser_to_proxy = establish or
     # pass in from caller function)
 
-    # while True:
+    logp("In handle non connect")
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((host, port))
+            response = s.recv(1024)
+            logp("Response from server " + response)
+
     pass
 
 
