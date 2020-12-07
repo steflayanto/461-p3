@@ -95,7 +95,7 @@ def handle_request(res, conn):
     pass
 
 
-# Returns the host, port, user_agent, req_type
+# Returns the host, port, req_type, http_msg
 def parse_request(res):
     logp("Parsing request")
     res_decoded = res.decode()
@@ -144,7 +144,7 @@ def parse_request(res):
         elif line.find('Connection') != -1:
             http_msg += "Connection: close\r\n"
         else:
-            http_msg += line
+            http_msg += line + "\n"
 
     logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " " + http_msg)
     return (host, port, req_type, http_msg)
@@ -157,19 +157,21 @@ def logp(str):
 def handle_non_connect(host, port, http_msg, conn):
     logp("handling non-connect " + host + " " + str(port))
     logp("In handle non connect " + str(port))
-    while True:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((host, port))
-            ba = BitArray()
-            ba.append(http_msg.encode('utf-8'))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((host, port))
+        logp("After connect")
+        ba = BitArray()
+        ba.append(http_msg.encode('utf-8'))
+        while True:
             s.send(ba.tobytes())
-            response = s.recv(2048)
+            response = s.recv(1024)
             logp("Response from server " + response.decode())
             if response:
                 conn.send(response)
-            s.close()
-            conn.close()
-        break
+            else:
+                break
+        s.close()
+        conn.close()
 
 
 def handle_connect(host, port, http_msg, conn):
