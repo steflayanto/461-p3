@@ -162,8 +162,8 @@ def handle_non_connect(host, port, http_msg, conn):
         logp("After connect")
         ba = BitArray()
         ba.append(http_msg.encode('utf-8'))
+        s.send(ba.tobytes())
         while True:
-            s.send(ba.tobytes())
             response = s.recv(1024)
             logp("Response from server " + response.decode())
             if response:
