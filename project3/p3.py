@@ -115,18 +115,18 @@ def parse_request(res):
             split_i = 0
             for i, c in enumerate(reversed(host)):
                 if c == ":":
-                    split_i = i - 1
+                    split_i = i
                     break
 
             # If port is not there, use 80. If https:// is present, use 443
-            if split_i > PORT_MAX_LENGTH:
+            if split_i > PORT_MAX_LENGTH or host.find(':') == -1:
                 port = 80
                 if line.find('https://') != -1:
                     port = 443
             else:
-                host = host[:len(host) - split_i]
-                print("host " + host)
-                port = int(host[-split_i + 1:])
+                temp = host
+                host = host[:len(host) - (split_i + 1)]
+                port = int(temp[-split_i:])
 
             # Get rid of http[s]s
             if host.find('http://') != -1:
@@ -161,11 +161,10 @@ def handle_non_connect(host, port, http_msg, conn):
         s.connect((host, port))
         logp("After connect")
         ba = BitArray()
-        ba.append(http_msg.encode('utf-8'))
+        ba.append(http_msg.encode())
         s.send(ba.tobytes())
         while True:
             response = s.recv(1024)
-            logp("Response from server " + response.decode())
             if response:
                 conn.send(response)
             else:
