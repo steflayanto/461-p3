@@ -32,20 +32,6 @@ Two flows:
                 brower_to_proxy.send (edited response)
 
 
-    def handle_connect():
-        print("handling connect")
-        # These are all connection objects
-        browser_to_proxy = establish or pass in from caller function)
-        proxy_to_dest = establish or pass in from caller function)
-
-        while True:
-            if new_data_from_browser:
-                forward_to_dest
-
-            if new_data_from_proxy:
-                forward_to_browser
-
-
 
 """
 HOST = '127.0.0.1'
@@ -78,21 +64,38 @@ def run():
     
             """
             conn, addr = s.accept()
-            res = conn.recv(1024)
-            if res:
-                print(res.decode().split('\n')[0])
-                handle_request(res, conn)
+            _thread.start_new_thread(handle_request, (conn,))
 
 
-def handle_request(res, conn):
+def handle_request(conn):
+    res = conn.recv(1024)
+    if res:
+        print(res.decode().split('\n')[0])
+
     host, port, req_type, http_msg = parse_request(res)
     if req_type == "CONNECT":
         logp("Starting CONNECT thread")
-        _thread.start_new_thread(handle_connect, (host, port, http_msg, conn))
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, port))
+
+        conn.send(b'HTTP/1.0 200 OK\r\n\r\n')
+
+        threads = []
+        thread_two = threading.Thread(target=handle_connect, args=(s, conn))
+        thread_one = threading.Thread(target=handle_connect, args=(conn, s))
+        threads.append(thread_one)
+        threads.append(thread_two)
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        print("joined")
     else:
         logp("Starting non_CONNECT thread")
         _thread.start_new_thread(handle_non_connect, (host, port, http_msg, conn))
-    pass
 
 
 # Returns the host, port, req_type, http_msg
@@ -173,8 +176,22 @@ def handle_non_connect(host, port, http_msg, conn):
         conn.close()
 
 
-def handle_connect(host, port, http_msg, conn):
-    pass
+def handle_connect(src, dst):
+    while True:
+        data = None
+        try:
+            data = src.recv(1024)
+            print("data " + str(len(data)))
+        except Exception as e:
+            print(e)
+            break
+
+        if data:
+            dst.send(data)
+        else:
+            break
+    dst.close()
+
 
 if __name__ == "__main__":
     run()
