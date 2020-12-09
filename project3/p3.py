@@ -66,9 +66,10 @@ def run():
 
     # bind to socket, just like p1
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # s.settimeout(2)
         s.bind((HOST, PORT_NUM))
         s.listen()
-        logp("Binded on host " + str(HOST) + " on port " + str(PORT_NUM))
+        logp("Bound on host " + str(HOST) + " on port " + str(PORT_NUM))
         while True:
             """
             # TODO: make sure connection obj works as we think and a port won't be doubly used. might need to maintain a global list of ports
@@ -78,9 +79,9 @@ def run():
     
             """
             conn, addr = s.accept()
-            res = conn.recv(1024)
+            res = conn.recv(1024) # recieve on a separate thread
             if res:
-                print(res.decode().split('\n')[0])
+                # print(res.decode().split('\n'))
                 handle_request(res, conn)
 
 
@@ -92,71 +93,91 @@ def handle_request(res, conn):
     else:
         logp("Starting non_CONNECT thread")
         _thread.start_new_thread(handle_non_connect, (host, port, http_msg, conn))
-    pass
+    # pass
 
 
 # Returns the host, port, req_type, http_msg
 def parse_request(res):
     logp("Parsing request")
     res_decoded = res.decode()
-
+    # print("<<<", res_decoded, ">>>")
     req_type = None
     host = None
     port = None
     http_msg = ""
-    lines = res_decoded.split('\n')
+    lines = res_decoded.split('\r\n')
     for i, line in enumerate(lines):
         if i == 0:
+            
             split = line.split(' ')
-
+            # print(split)
             req_type = split[0]
-            host = split[1]  # could contain port
+            
+            # Parse host
+            host = split[1]
 
-            split_i = 0
-            for i, c in enumerate(reversed(host)):
-                if c == ":":
-                    split_i = i - 1
-                    break
 
-            # If port is not there, use 80. If https:// is present, use 443
-            if split_i > PORT_MAX_LENGTH:
-                port = 80
-                if line.find('https://') != -1:
-                    port = 443
-            else:
-                host = host[:len(host) - split_i]
-                print("host " + host)
-                port = int(host[-split_i + 1:])
-
-            # Get rid of http[s]s
             if host.find('http://') != -1:
-                host = host.split('http://')[1]
+                protocol = 'http://'
+                host = host.replace('http://','')
+
+
             elif host.find('https://') != -1:
-                host = host.split('https://')[1]
+                protocol = 'https://'
+                host = host.replace('https://','')
+            else:
+                protocol = ""
 
-            # Get rid of anything after the /
-            if host.find('/') != -1:
-                host = host.split('/')[0]
+            if ':' in host:
+                host, port = split[1].split(':')  # could contain port
+                try:
+                    port = int(port)
+                except:
+                    port = 80
+            else:
+                port  = 80
 
-            http_msg += split[0] + " " + split[1] + " HTTP/1.0\r\n"
+            slash_idx = host.find('/')
+
+            if slash_idx != -1:
+                resource = host[slash_idx:]
+                host = host[:slash_idx]
+                # print("separated {} and {}".format(host, resource))
+            else:
+                resource = "/"
+
+            http_msg += split[0] + " " + protocol + host + resource + " HTTP/1.0\r\n"
+
         elif line.find('Proxy-Connection') != -1:
             http_msg += "Proxy-Connection: close\r\n"
         elif line.find('Connection') != -1:
             http_msg += "Connection: close\r\n"
+        elif line.find('Host') != -1:
+            http_msg += "Host: " + host + "\r\n"
+        # elif 'Upgrade-Insecure-Requests:' in line:
+            # http_msg += "Upgrade-Insecure-Requests: 0\r\n"
         else:
-            http_msg += line + "\n"
-
-    logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " " + http_msg)
+            http_msg += line + "\r\n"
+    http_msg += "\r\n"
+    print("original-------------------")
+    print(res_decoded)
+    print("modified-------------------")
+    print(http_msg)
+    logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " msg:" + http_msg)
+    # print(">>>", req_type, host)
+    # req_type = "non_connect"
     return (host, port, req_type, http_msg)
+    # return (host, port, req_type, res_decoded)
 
 
 def logp(str):
     print(HOST_NAME + " " + str)
+    # pass
 
 
 def handle_non_connect(host, port, http_msg, conn):
     logp("handling non-connect " + host + " " + str(port))
-    logp("In handle non connect " + str(port))
+    # logp("In handle non connect " + str(port))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((host, port))
         logp("After connect")
@@ -165,7 +186,7 @@ def handle_non_connect(host, port, http_msg, conn):
         s.send(ba.tobytes())
         while True:
             response = s.recv(1024)
-            logp("Response from server " + response.decode())
+            logp("Response from server " + response.decode(errors='ignore'))
             if response:
                 conn.send(response)
             else:
@@ -175,7 +196,88 @@ def handle_non_connect(host, port, http_msg, conn):
 
 
 def handle_connect(host, port, http_msg, conn):
-    pass
+
+    return None
+    # host = host.split(":")[0]
+    # port = 80
+    print("handling connect")
+    # These are all connection objects
+    browser_to_proxy = conn
+    browser_to_proxy.settimeout(2)
+    proxy_to_dest = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    proxy_to_dest.settimeout(2)
+    try:
+        proxy_to_dest.connect((host, port))
+    except Exception as e:
+        print("Unable to establish connection with host: {} port: {} exception: {}".format(host, port, e))
+        resp = """HTTP/1.0 502 BAD GATEWAY
+        Content-Type: text/html
+
+
+
+        """
+        browser_to_proxy.send(resp.encode('utf-8'))
+        return None
+    # else:
+    print("Established connection with host")
+    
+    # ACK the browser
+    resp = """HTTP/1.0 200 OK
+    Content-Type: text/html
+
+
+
+    """
+    browser_to_proxy.send(resp.encode('utf-8'))
+
+    # Forward request to dest
+    # print("PENIS\n<<<", http_msg, ">>>")
+    proxy_to_dest.send(http_msg.encode('utf-8'))
+    
+    
+
+    while browser_to_proxy and proxy_to_dest:
+        # print("Connect setup")
+        # if new_data_from_browser:
+        #     proxy_to_dest.send()
+
+        # if new_data_from_proxy:
+        #     browser_to_proxy.send()
+        
+        print("Waiting on browser")
+        try:
+            while True:
+                browser_response = browser_to_proxy.recv(1024)
+                if browser_response:
+                    # Pull header
+                    # print(browser_response.decode(encoding='ASCII', errors='ignore'))
+                    # print("--------------------------")
+                    # print(browser_response.decode(encoding='UTF-8', errors='ignore'))
+                    # print(browser_response.decode(errors="ignore"))
+                    proxy_to_dest.send(browser_response)
+                else:
+                    print("Empty response from browser")
+                    break
+        except:
+            print("nothing received from browser")
+
+        print("Waiting on dest")
+        try:
+            while True:
+                dest_response = proxy_to_dest.recv(1024)
+                # logp("Response from server " + response.decode())
+                if dest_response: # Forward to client
+                    # print(dest_response.decode(errors="ignore"))
+                    browser_to_proxy.send(dest_response)
+                else:
+                    print("Empty response from dest")
+                    break
+        except:
+            print("nothing received from dest")
+        # pass
+    
+    # CLEANUP
+
 
 if __name__ == "__main__":
     run()
