@@ -54,27 +54,26 @@ def run():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT_NUM))
         s.listen()
-        logp("Binded on host " + str(HOST) + " on port " + str(PORT_NUM))
+        logp("Proxy listening on " + str(HOST) + ":" + str(PORT_NUM))
         while True:
-            """
-            # TODO: make sure connection obj works as we think and a port won't be doubly used. might need to maintain a global list of ports
-            if new request:
-                threading.thread or whatever handle_request(connection_object, req)
-                thread( funct_name, args=[]) something like this
-    
-            """
+
             conn, addr = s.accept()
             _thread.start_new_thread(handle_request, (conn,))
 
 
 def handle_request(conn):
-    res = conn.recv(1024)
-    if res:
-        print(res.decode().split('\n')[0])
-
-    host, port, req_type, http_msg = parse_request(res)
+    try:
+        res = conn.recv(1024)
+    except:
+        return None
+    # if res:
+    #     print(res.decode().split('\n')[0])
+    try:
+        host, port, req_type, http_msg = parse_request(res)
+    except:
+        return None
     if req_type == "CONNECT":
-        logp("Starting CONNECT thread")
+        # logp("Starting CONNECT thread")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((host, port))
 
@@ -92,16 +91,16 @@ def handle_request(conn):
         for thread in threads:
             thread.join()
 
-        print("joined")
+        # print("joined")
     else:
-        logp("Starting non_CONNECT thread")
+        # logp("Starting non_CONNECT thread")
         _thread.start_new_thread(handle_non_connect, (host, port, http_msg, conn))
 
 
 # Returns the host, port, req_type, http_msg
 def parse_request(res):
-    logp("Parsing request")
-    res_decoded = res.decode()
+    # logp("Parsing request")
+    res_decoded = res.decode(errors='ignore')
 
     req_type = None
     host = None
@@ -113,7 +112,9 @@ def parse_request(res):
             split = line.split(' ')
 
             req_type = split[0]
+            
             host = split[1]  # could contain port
+            
 
             split_i = 0
             for i, c in enumerate(reversed(host)):
@@ -141,7 +142,7 @@ def parse_request(res):
             if host.find('/') != -1:
                 host = host.split('/')[0]
 
-            http_msg += split[0] + " " + split[1] + " HTTP/1.0\r\n"
+            http_msg += split[0] + " " + host + " HTTP/1.0\r\n"
         elif line.find('Proxy-Connection') != -1:
             http_msg += "Proxy-Connection: close\r\n"
         elif line.find('Connection') != -1:
@@ -149,7 +150,8 @@ def parse_request(res):
         else:
             http_msg += line + "\n"
 
-    logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " " + http_msg)
+    # logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " " + http_msg)
+    print(">>> {} {}".format(req_type, host))
     return (host, port, req_type, http_msg)
 
 
@@ -158,11 +160,11 @@ def logp(str):
 
 
 def handle_non_connect(host, port, http_msg, conn):
-    logp("handling non-connect " + host + " " + str(port))
-    logp("In handle non connect " + str(port))
+    # logp("handling non-connect " + host + " " + str(port))
+    # logp("In handle non connect " + str(port))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((host, port))
-        logp("After connect")
+        # logp("After connect")
         ba = BitArray()
         ba.append(http_msg.encode())
         s.send(ba.tobytes())
@@ -181,9 +183,9 @@ def handle_connect(src, dst):
         data = None
         try:
             data = src.recv(1024)
-            print("data " + str(len(data)))
+            # print("data " + str(len(data)))
         except Exception as e:
-            print(e)
+            # print(e)
             break
 
         if data:
