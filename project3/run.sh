@@ -1,2 +1,1 @@
-sudo chmod 755 p3
-./p3 $1
+python3 p3.py $1
