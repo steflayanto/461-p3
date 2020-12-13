@@ -142,7 +142,7 @@ def parse_request(res):
             if host.find('/') != -1:
                 host = host.split('/')[0]
 
-            http_msg += split[0] + " " + host + " HTTP/1.0\r\n"
+            http_msg += split[0] + " " + split[1] + " HTTP/1.0\r\n"
         elif line.find('Proxy-Connection') != -1:
             http_msg += "Proxy-Connection: close\r\n"
         elif line.find('Connection') != -1:
@@ -150,7 +150,7 @@ def parse_request(res):
         else:
             http_msg += line + "\n"
 
-    # logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " " + http_msg)
+    logp("Returning from parse request " + host + " " + str(port) + " " + req_type + " " + http_msg)
     print(">>> {} {}".format(req_type, host))
     return (host, port, req_type, http_msg)
 
@@ -160,11 +160,11 @@ def logp(str):
 
 
 def handle_non_connect(host, port, http_msg, conn):
-    # logp("handling non-connect " + host + " " + str(port))
-    # logp("In handle non connect " + str(port))
+    logp("handling non-connect " + host + " " + str(port))
+    logp("In handle non connect " + str(port))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((host, port))
-        # logp("After connect")
+        logp("After connect")
         ba = BitArray()
         ba.append(http_msg.encode())
         s.send(ba.tobytes())
